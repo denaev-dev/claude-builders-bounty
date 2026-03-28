@@ -1,5 +1,5 @@
 {
-  "name": "STARK: Automated Weekly Dev Summary (Claude Edition)",
+  "name": "Automated Weekly Repository Summary",
   "nodes": [
     {
       "parameters": {
@@ -23,7 +23,6 @@
     },
     {
       "parameters": {
-        "authentication": "oAuth2",
         "resource": "repository",
         "operation": "getCommits",
         "owner": "={{$vars.GITHUB_OWNER || \"denaev-dev\"}}",
@@ -43,7 +42,6 @@
     },
     {
       "parameters": {
-        "authentication": "oAuth2",
         "resource": "issue",
         "operation": "getAll",
         "owner": "={{$vars.GITHUB_OWNER || \"denaev-dev\"}}",
@@ -64,7 +62,6 @@
     },
     {
       "parameters": {
-        "authentication": "oAuth2",
         "resource": "pullRequest",
         "operation": "getAll",
         "owner": "={{$vars.GITHUB_OWNER || \"denaev-dev\"}}",
@@ -97,7 +94,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const commits = $items(\"GitHub Commits\");\nconst issues = $items(\"GitHub Issues\");\nconst prs = $items(\"GitHub PRs\");\n\n// Filter noise (Dependabot, automated chores)\nconst cleanCommits = commits.filter(i => \n  !i.json.commit.message.toLowerCase().includes('chore') && \n  !i.json.commit.author.name.toLowerCase().includes('dependabot')\n);\n\nconst weekData = {\n  total_commits: commits.length,\n  active_commits: cleanCommits.map(i => i.json.commit.message),\n  closed_issues: issues.map(i => i.json.title),\n  merged_prs: prs.filter(i => i.json.merged_at).map(i => i.json.title)\n};\n\nreturn { data: JSON.stringify(weekData, null, 2) };"
+        "jsCode": "const commits = $items(\"GitHub Commits\");\nconst issues = $items(\"GitHub Issues\");\nconst prs = $items(\"GitHub PRs\");\n\nconst cleanCommits = commits.filter(i => \n  !i.json.commit.message.toLowerCase().includes('chore') && \n  !i.json.commit.author.name.toLowerCase().includes('dependabot')\n);\n\nconst weekData = {\n  total_commits: commits.length,\n  active_commits: cleanCommits.map(i => i.json.commit.message),\n  closed_issues: issues.map(i => i.json.title),\n  merged_prs: prs.filter(i => i.json.merged_at).map(i => i.json.title)\n};\n\nreturn { data: JSON.stringify(weekData, null, 2), count: commits.length };"
       },
       "id": "aggregator",
       "name": "Aggregator & Filter",
@@ -110,54 +107,74 @@
     },
     {
       "parameters": {
-        "model": "claude-sonnet-4-20250514",
-        "prompt": "=Identify key development themes for the week. \nFormat as a clean Markdown digest for developers:\n- 🔥 **Key Achievements**\n- 🛠 **Internal Refactoring**\n- 🐛 **Bug Fixes**\n- 📈 **Weekly Stats**: {{$node[\"Aggregator & Filter\"].json[\"total_commits\"]}} commits, {{prs.length}} PRs processed.\n\nData (JSON):\n{{$node[\"Aggregator & Filter\"].json[\"data\"]}}\n\nLanguage: {{$vars.SUMMARY_LANGUAGE || \"English\"}}",
-        "options": {
-          "system": "You are a senior engineering manager. Your tone is professional, concise, and technical. Focus on impact, not just lines of code."
-        }
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-3-5-sonnet-20240620"
+            },
+            {
+              "name": "max_tokens",
+              "value": "1024"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Write a professional engineering weekly summary. Activity data: {{ $node['Aggregator & Filter'].json.data }}\"}]"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "claude-api",
-      "name": "Claude API (Sonnet)",
-      "type": "n8n-nodes-base.anthropic",
-      "typeVersion": 1,
+      "id": "claude-http",
+      "name": "Claude API (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
-        1000,
+        1050,
         300
       ]
     },
     {
       "parameters": {
-        "url": "={{$vars.DESTINATION_WEBHOOK}}",
+        "url": "https://discord.com/api/webhooks/YOUR_URL",
         "method": "POST",
+        "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "content",
-              "value": "={{$node[\"Claude API (Sonnet)\"].json[\"text\"]}}"
+              "value": "={{ $node['Claude API (HTTP)'].json.content[0].text }}"
             }
           ]
         }
       },
       "id": "discord-notify",
-      "name": "Discord/Slack Notify",
+      "name": "Final Notification",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1200,
+        1300,
         300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "return { \n  errorMessage: \"Workflow Failed: Weekly Summary Generation Error\",\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "error-handler",
-      "name": "Error Logic",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1000,
-        500
       ]
     }
   ],
@@ -231,18 +248,18 @@
       "main": [
         [
           {
-            "node": "Claude API (Sonnet)",
+            "node": "Claude API (HTTP)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude API (Sonnet)": {
+    "Claude API (HTTP)": {
       "main": [
         [
           {
-            "node": "Discord/Slack Notify",
+            "node": "Final Notification",
             "type": "main",
             "index": 0
           }
