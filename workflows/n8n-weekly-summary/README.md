@@ -24,4 +24,4 @@ This n8n workflow automates the generation of weekly repository activity summari
 - API Version: `2023-06-01`
 
 ## Payment Information
-- SOL Address: `6eUdVwsPArTxwVqEARYGCh4S2qwW2zCs7jSEDRpxydnv`
+- SOL Address: `9gw55AjDXPsS8vuzKKNpxehMKDFYQwGS8bheYbS95afN`
